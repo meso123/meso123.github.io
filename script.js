@@ -1,152 +1,173 @@
 const root = document.documentElement;
 const body = document.body;
-const themeToggle = document.querySelector('[data-theme-toggle]');
-const themeLabel = document.querySelector('.theme-label');
-const savedTheme = localStorage.getItem('mazen-portfolio-theme');
-
-function setTheme(theme) {
-  body.dataset.theme = theme;
-  themeLabel.textContent = theme === 'light' ? 'Dark' : 'Light';
-  themeToggle.setAttribute('aria-label', `Switch to ${theme === 'light' ? 'dark' : 'light'} theme`);
-  localStorage.setItem('mazen-portfolio-theme', theme);
-}
-
-setTheme(savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-
-themeToggle.addEventListener('click', () => {
-  setTheme(body.dataset.theme === 'light' ? 'dark' : 'light');
-});
-
-const revealItems = document.querySelectorAll('.reveal');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-if (reducedMotion || !('IntersectionObserver' in window)) {
-  revealItems.forEach((item) => item.classList.add('is-visible'));
-} else {
-  const revealObserver = new IntersectionObserver((entries, observer) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      entry.target.classList.add('is-visible');
-      observer.unobserve(entry.target);
-    });
-  }, { threshold: 0.12, rootMargin: '0px 0px -4% 0px' });
+const savedTheme = localStorage.getItem('mazen-theme');
+if (savedTheme === 'dark' || savedTheme === 'light') root.dataset.theme = savedTheme;
 
-  revealItems.forEach((item) => revealObserver.observe(item));
-}
+const themeToggle = document.querySelector('[data-theme-toggle]');
+themeToggle?.addEventListener('click', () => {
+  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = next;
+  localStorage.setItem('mazen-theme', next);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#11120f' : '#f4f0e7');
+});
 
-const progressBar = document.querySelector('.scroll-progress span');
-const header = document.querySelector('[data-header]');
-
-function updateScrollUI() {
+const progress = document.querySelector('.page-progress span');
+const nav = document.querySelector('[data-nav]');
+let lastY = 0;
+const updateScroll = () => {
   const max = document.documentElement.scrollHeight - window.innerHeight;
-  const progress = max > 0 ? (window.scrollY / max) * 100 : 0;
-  progressBar.style.width = `${progress}%`;
-  header.classList.toggle('is-scrolled', window.scrollY > 40);
-}
+  if (progress) progress.style.width = `${max > 0 ? (window.scrollY / max) * 100 : 0}%`;
+  if (nav && window.scrollY > 160) nav.classList.toggle('is-hidden', window.scrollY > lastY && window.scrollY - lastY > 5);
+  else nav?.classList.remove('is-hidden');
+  lastY = Math.max(window.scrollY, 0);
+};
+window.addEventListener('scroll', updateScroll, { passive: true });
+updateScroll();
 
-updateScrollUI();
-window.addEventListener('scroll', updateScrollUI, { passive: true });
-
-const navLinks = [...document.querySelectorAll('.site-header nav a')];
-const observedSections = navLinks
-  .map((link) => document.querySelector(link.getAttribute('href')))
-  .filter(Boolean);
-
-if ('IntersectionObserver' in window) {
-  const sectionObserver = new IntersectionObserver((entries) => {
-    const visible = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-
-    if (!visible) return;
-    navLinks.forEach((link) => {
-      link.classList.toggle('is-active', link.getAttribute('href') === `#${visible.target.id}`);
-    });
-  }, { threshold: [0.12, 0.32, 0.58], rootMargin: '-18% 0px -55% 0px' });
-
-  observedSections.forEach((section) => sectionObserver.observe(section));
-}
-
-const dialog = document.getElementById('posecoach-dialog');
-const dialogVideo = dialog.querySelector('video');
-
-document.querySelectorAll('[data-open-dialog]').forEach((button) => {
-  button.addEventListener('click', () => {
-    dialog.showModal();
-    dialogVideo.focus();
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      revealObserver.unobserve(entry.target);
+    }
   });
+}, { threshold: 0.12, rootMargin: '0px 0px -40px' });
+document.querySelectorAll('.reveal').forEach((element) => revealObserver.observe(element));
+
+const menuButton = document.querySelector('[data-menu-toggle]');
+const mobileMenu = document.querySelector('[data-mobile-menu]');
+menuButton?.addEventListener('click', () => {
+  const open = menuButton.getAttribute('aria-expanded') === 'true';
+  menuButton.setAttribute('aria-expanded', String(!open));
+  mobileMenu?.classList.toggle('open', !open);
+});
+mobileMenu?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => {
+  mobileMenu.classList.remove('open');
+  menuButton?.setAttribute('aria-expanded', 'false');
+}));
+
+document.querySelector('[data-flip-card]')?.addEventListener('click', (event) => {
+  event.currentTarget.classList.toggle('flipped');
 });
 
-function closeDialog() {
-  dialogVideo.pause();
-  dialog.close();
-}
-
-dialog.querySelector('[data-close-dialog]').addEventListener('click', closeDialog);
-dialog.addEventListener('click', (event) => {
-  const rect = dialog.getBoundingClientRect();
-  const outside = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
-  if (outside) closeDialog();
-});
-dialog.addEventListener('close', () => dialogVideo.pause());
-
-const projectRows = [...document.querySelectorAll('.project-row')];
-projectRows.forEach((row) => {
-  row.addEventListener('toggle', () => {
-    if (!row.open) return;
-    projectRows.forEach((other) => {
-      if (other !== row) other.open = false;
-    });
-  });
-});
-
-function formatMetric(value, target, original) {
-  if (original.includes('%')) {
-    return `${target % 1 === 0 ? Math.round(value) : value.toFixed(1)}%`;
-  }
-  return Math.round(value).toLocaleString('en-US');
-}
-
-const countItems = document.querySelectorAll('[data-count]');
-if ('IntersectionObserver' in window && !reducedMotion) {
-  const countObserver = new IntersectionObserver((entries, observer) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      const element = entry.target;
-      const target = Number(element.dataset.count);
-      const original = element.textContent;
-      const duration = 1100;
-      const start = performance.now();
-
-      const tick = (now) => {
-        const elapsed = Math.min((now - start) / duration, 1);
-        const eased = 1 - Math.pow(1 - elapsed, 3);
-        element.textContent = formatMetric(target * eased, target, original);
-        if (elapsed < 1) requestAnimationFrame(tick);
-      };
-
-      requestAnimationFrame(tick);
-      observer.unobserve(element);
-    });
-  }, { threshold: 0.55 });
-
-  countItems.forEach((item) => countObserver.observe(item));
-}
-
-const visionStage = document.querySelector('.vision-stage');
-if (visionStage && window.matchMedia('(pointer: fine)').matches && !reducedMotion) {
-  visionStage.addEventListener('pointermove', (event) => {
-    const rect = visionStage.getBoundingClientRect();
+const attachTilt = (surface, strength = 8) => {
+  if (!surface || reducedMotion || window.matchMedia('(pointer: coarse)').matches) return;
+  const target = surface.querySelector('.portrait-card') || surface;
+  surface.addEventListener('pointermove', (event) => {
+    const rect = surface.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width - 0.5;
     const y = (event.clientY - rect.top) / rect.height - 0.5;
-    visionStage.style.setProperty('--tilt-x', `${x * 8}px`);
-    visionStage.style.setProperty('--tilt-y', `${y * 8}px`);
-    visionStage.querySelector('.pose-map').style.transform = `translateX(calc(-50% + ${x * 8}px)) translateY(${y * 8}px)`;
+    target.style.transform = `rotateX(${-y * strength}deg) rotateY(${x * strength}deg)`;
   });
+  surface.addEventListener('pointerleave', () => { target.style.transform = ''; });
+};
+attachTilt(document.querySelector('[data-tilt-card]'), 9);
+document.querySelectorAll('[data-parallax-card]').forEach((card) => attachTilt(card, 4));
 
-  visionStage.addEventListener('pointerleave', () => {
-    visionStage.querySelector('.pose-map').style.transform = 'translateX(-50%)';
+const filters = document.querySelector('[data-skill-filters]');
+const skillTiles = [...document.querySelectorAll('.skill-tile')];
+const skillName = document.querySelector('[data-skill-name]');
+const skillNote = document.querySelector('[data-skill-note]');
+const selectSkill = (tile) => {
+  skillTiles.forEach((item) => item.classList.toggle('selected', item === tile));
+  if (skillName) skillName.textContent = tile.querySelector('span')?.textContent || '';
+  if (skillNote) skillNote.textContent = tile.dataset.note || '';
+};
+skillTiles.forEach((tile) => {
+  tile.addEventListener('mouseenter', () => selectSkill(tile));
+  tile.addEventListener('focus', () => selectSkill(tile));
+  tile.addEventListener('click', () => selectSkill(tile));
+});
+if (skillTiles[0]) selectSkill(skillTiles[0]);
+filters?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-filter]');
+  if (!button) return;
+  filters.querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
+  const filter = button.dataset.filter;
+  skillTiles.forEach((tile) => tile.classList.toggle('filtered-out', filter !== 'all' && tile.dataset.family !== filter));
+});
+
+document.querySelectorAll('.project-panel').forEach((panel) => {
+  const button = panel.querySelector('.project-summary');
+  const bodyPanel = panel.querySelector('.project-body');
+  const symbol = panel.querySelector('.project-plus');
+  button?.addEventListener('click', () => {
+    const isOpen = button.getAttribute('aria-expanded') === 'true';
+    button.setAttribute('aria-expanded', String(!isOpen));
+    panel.classList.toggle('active', !isOpen);
+    if (bodyPanel) bodyPanel.hidden = isOpen;
+    if (symbol) symbol.textContent = isOpen ? '+' : '−';
   });
-}
+});
 
-root.classList.add('js-ready');
+const toast = document.querySelector('[data-toast]');
+let toastTimer;
+document.querySelectorAll('[data-copy-email]').forEach((button) => button.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText('mazens543210@gmail.com');
+    if (toast) {
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+  } catch {
+    window.location.href = 'mailto:mazens543210@gmail.com';
+  }
+}));
+
+document.querySelectorAll('[data-open-dialog]').forEach((button) => button.addEventListener('click', () => {
+  const dialog = document.getElementById(button.dataset.openDialog);
+  dialog?.showModal();
+}));
+document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => {
+  const dialog = button.closest('dialog');
+  const video = dialog?.querySelector('video');
+  video?.pause();
+  dialog?.close();
+}));
+document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+  if (event.target === dialog) {
+    dialog.querySelector('video')?.pause();
+    dialog.close();
+  }
+}));
+
+const recruiterToggle = document.querySelector('[data-recruiter-toggle]');
+recruiterToggle?.addEventListener('click', () => {
+  const active = body.classList.toggle('recruiter-mode');
+  recruiterToggle.setAttribute('aria-pressed', String(active));
+  recruiterToggle.textContent = active ? 'Full story' : '30-sec mode';
+  if (active) document.querySelector('#work')?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' });
+});
+
+const facts = [
+  'PoseCoach evaluated 792 real exercise repetitions.',
+  'Five lightweight models add only 127 KB to PoseCoach.',
+  'Mazen tuned Hough output from 1,075 lines to 13 useful detections.',
+  'Interval reached a highest usability score of 90.',
+  'The mascot is named MZ—17 after MoveNet’s 17 body keypoints.',
+  'Mazen works natively in both Arabic and English.'
+];
+let factIndex = 0;
+const mascot = document.querySelector('[data-mascot]');
+const factBubble = document.querySelector('[data-fact-bubble]');
+let factTimer;
+mascot?.addEventListener('click', () => {
+  if (!factBubble) return;
+  factBubble.textContent = facts[factIndex % facts.length];
+  factIndex += 1;
+  factBubble.hidden = false;
+  clearTimeout(factTimer);
+  factTimer = setTimeout(() => { factBubble.hidden = true; }, 5200);
+});
+
+document.querySelectorAll('.magnetic').forEach((button) => {
+  if (reducedMotion || window.matchMedia('(pointer: coarse)').matches) return;
+  button.addEventListener('pointermove', (event) => {
+    const rect = button.getBoundingClientRect();
+    button.style.transform = `translate(${(event.clientX - rect.left - rect.width / 2) * 0.1}px, ${(event.clientY - rect.top - rect.height / 2) * 0.1}px)`;
+  });
+  button.addEventListener('pointerleave', () => { button.style.transform = ''; });
+});
